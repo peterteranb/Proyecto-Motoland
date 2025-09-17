@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Historial de Transacciones - MOTOLAND</title>
+    <link rel="stylesheet" href="../style.css">
+
+    <style>
+        .historial-container {
+            background-color: #f9f9f9;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        #historial-table { width:100%; margin-top:20px; border-collapse:collapse; }
+        #historial-table th, #historial-table td { padding:12px 15px; border:1px solid #ddd; text-align:left; vertical-align:top; }
+        #historial-table th { background-color:#003366; color:white; }
+        #historial-table tbody tr:nth-of-type(even) { background-color:#f2f2f2; }
+        .tipo-venta { color:#155724; font-weight:bold; }
+        .tipo-compra { color:#721c24; font-weight:bold; }
+        .tipo-devolucion { color:#ff8c00; font-weight:bold; }
+        #search-input { width:100%; padding:10px; border:1px solid #ccc; border-radius:5px; margin-bottom:15px; }
+        .small-muted { color:#666; font-size:0.9em; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header class="menu-header">
+        <h1>Historial de Transacciones</h1>
+        <button onclick="window.location.href='../menu.html'">Volver al Menú</button>
+    </header>
+
+    <div class="historial-container">
+        <input type="text" id="search-input" placeholder="Buscar por tipo, código, cliente o proveedor...">
+        <table id="historial-table">
+            <thead>
+            <tr>
+                <th>Tipo</th>
+                <th>Código</th>
+                <th>Fecha y Hora</th>
+                <th>Detalle</th>
+                <th>Ubicación</th>
+                <th>Total (Bs.)</th>
+                <th>Estado</th>
+            </tr>
+            </thead>
+            <tbody id="historial-tbody">
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const tbody = document.getElementById('historial-tbody');
+        const searchInput = document.getElementById('search-input');
+        let allTransactions = [];
+
+        function renderTable(transactions) {
+            tbody.innerHTML = '';
+            if (!transactions || transactions.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No se encontraron transacciones.</td></tr>';
+                return;
+            }
+
+            transactions.forEach(t => {
+                const row = document.createElement('tr');
+
+                let tipoClass = '';
+                if (t.tipo === 'Venta') tipoClass = 'tipo-venta';
+                else if (t.tipo === 'Compra') tipoClass = 'tipo-compra';
+                else if (t.tipo === 'Devolución') tipoClass = 'tipo-devolucion';
+
+                const fecha = t.fecha ? new Date(t.fecha).toLocaleString('es-BO') : '';
+
+                if (t.estado === 'Anulada') {
+                    row.style.textDecoration = 'line-through';
+                    row.style.color = '#888';
+                }
+
+                // ubicacion: mostrar '-' si vacío
+                const ubic = t.ubicacion && t.ubicacion.length ? t.ubicacion : '-';
+
+                row.innerHTML = `
+            <td><span class="${tipoClass}">${t.tipo}</span></td>
+            <td>${t.codigo || 'N/A'}</td>
+            <td>${fecha}</td>
+            <td>${t.detalle || ''}</td>
+            <td>${ubic}</td>
+            <td>${(t.total || 0).toFixed(2)}</td>
+            <td><b>${t.estado || ''}</b></td>
+        `;
+                tbody.appendChild(row);
+            });
+        }
+
+        async function loadHistorial() {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Cargando...</td></tr>';
+            try {
+                const res = await fetch('../historial');
+                if (!res.ok) {
+                    // intentar leer cuerpo con texto para mostrar en consola
+                    const text = await res.text();
+                    console.error('Historial request failed. Status:', res.status, 'Response body:', text);
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:red;">Error al cargar los datos.</td></tr>';
+                    return;
+                }
+                const data = await res.json();
+                allTransactions = data;
+                renderTable(allTransactions);
+            } catch (err) {
+                console.error('Error al cargar el historial:', err);
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:red;">Error al cargar los datos.</td></tr>';
+            }
+        }
+
+        searchInput.addEventListener('input', () => {
+            const q = searchInput.value.trim().toLowerCase();
+            const filtered = allTransactions.filter(t => {
+                return (t.tipo && t.tipo.toLowerCase().includes(q)) ||
+                    (t.codigo && t.codigo.toLowerCase().includes(q)) ||
+                    (t.detalle && t.detalle.toLowerCase().includes(q)) ||
+                    (t.estado && t.estado.toLowerCase().includes(q)) ||
+                    (t.ubicacion && t.ubicacion.toLowerCase().includes(q));
+            });
+            renderTable(filtered);
+        });
+
+        loadHistorial();
+    });
+</script>
+</body>
+</html>

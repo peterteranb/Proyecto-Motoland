@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Gestión de Proveedores - MOTOLAND</title>
+    <link rel="stylesheet" href="../style.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+        :root{
+            --bg:#f4f7f9;
+            --card:#ffffff;
+            --primary:#003366;
+            --accent:#0b66c3;
+            --danger:#d9534f; /* color de botones tipo "Cerrar / Volver" */
+            --danger-dark:#c43d3d;
+            --muted:#6c757d;
+            --radius:10px;
+            --shadow: 0 8px 20px rgba(15,23,42,0.06);
+        }
+        *{box-sizing:border-box}
+        body{
+            margin:0;
+            font-family:'Poppins', system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+            background: linear-gradient(180deg,var(--bg) 0%, #eef3f6 100%);
+            color:#222;
+            padding:28px;
+            -webkit-font-smoothing:antialiased;
+            -moz-osx-font-smoothing:grayscale;
+        }
+        .page{ max-width:1100px; margin:0 auto; }
+        header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; }
+        header h1{ color:var(--primary); margin:0; font-size:26px; }
+
+        /* --- BOTÓN "VOLVER AL MENÚ" (coincidente con otros botones rojos) --- */
+        .btn-back{
+            background:var(--danger);
+            color:#fff;
+            border:none;
+            padding:10px 16px;
+            border-radius:12px;
+            cursor:pointer;
+            font-weight:700;
+            box-shadow: 0 6px 18px rgba(208,45,45,0.12);
+            transition: transform .12s ease, background-color .12s ease, box-shadow .12s ease;
+        }
+        .btn-back:hover{
+            background:var(--danger-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 24px rgba(196,61,61,0.14);
+        }
+        .btn-back:focus{ outline:none; box-shadow: 0 0 0 4px rgba(217,83,79,0.12); }
+
+        .card{ background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); padding:18px; border:1px solid rgba(12,20,30,0.03); }
+        form .row{ display:flex; gap:12px; margin-bottom:12px; align-items:flex-start; }
+        label{ display:block; font-weight:600; margin-bottom:6px; color:var(--primary); font-size:14px; }
+        input[type="text"], input[type="number"], textarea, select{
+            width:100%; padding:10px 12px; border-radius:8px; border:1px solid #e3e7ea; font-size:14px;
+            background:#fff; color:#222;
+        }
+        textarea{ min-height:48px; resize:vertical; }
+        .small{ width:140px; }
+        .catalogo-list{ margin-top:12px; border-top:1px solid #eef2f5; padding-top:12px; display:flex; flex-direction:column; gap:10px; }
+        .catalogo-item{ display:grid; grid-template-columns: 1fr 1fr 120px 40px; gap:8px; align-items:center; }
+        .catalogo-item .input-desc{ min-height:40px; }
+        .catalogo-item .btn-remove{ background:var(--danger); color:#fff; border:none; padding:8px; border-radius:8px; cursor:pointer; }
+        .controls{ display:flex; gap:10px; margin-top:10px; }
+        .btn-primary{ background:var(--primary); color:#fff; border:none; padding:10px 14px; border-radius:8px; font-weight:700; cursor:pointer; }
+        .btn-secondary{ background:transparent; color:var(--primary); border:1px solid rgba(0,0,0,0.06); padding:10px 12px; border-radius:8px; cursor:pointer; font-weight:600 }
+        .status{ margin-top:12px; padding:10px; border-radius:8px; display:none; }
+        .status.success{ display:block; background:#e6fbf1; color:#0a6a3a }
+        .status.error{ display:block; background:#fff0f0; color:#8a1f1f }
+        @media (max-width:900px){
+            .catalogo-item{ grid-template-columns: 1fr; }
+            .small{ width:100%; }
+            .row{ flex-direction:column; }
+        }
+    </style>
+</head>
+<body>
+<div class="page">
+    <header>
+        <h1>Gestión de Proveedores</h1>
+        <button class="btn-back" onclick="location.href='../menu.html'">Volver al Menú</button>
+    </header>
+
+    <section class="card">
+        <form id="proveedor-form" autocomplete="off">
+            <div class="row">
+                <div style="flex:1">
+                    <label for="nombre">Nombre del Proveedor</label>
+                    <input id="nombre" name="nombre" type="text" placeholder="Ej: Importadora El Veloz" required>
+                </div>
+                <div style="width:260px">
+                    <label for="contacto">Contacto</label>
+                    <input id="contacto" name="contacto" type="text" placeholder="Teléfono / email">
+                </div>
+            </div>
+
+            <div style="margin-top:8px;">
+                <label style="margin-bottom:8px;">Catálogo de Productos</label>
+                <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+                    <button id="btn-add-item" type="button" class="btn-primary">+ Añadir producto</button>
+                    <button id="btn-generate" type="button" class="btn-secondary">Generar N campos</button>
+                    <input id="cantidad-productos" type="number" min="1" value="1" class="small" style="margin-left:6px;">
+                    <button id="btn-clear" type="button" class="btn-secondary">Limpiar catálogo</button>
+                </div>
+
+                <div id="catalogo" class="catalogo-list" aria-live="polite"></div>
+            </div>
+
+            <div style="margin-top:12px; display:flex; justify-content:flex-end; gap:10px; align-items:center;">
+                <div id="status" class="status" role="status" aria-live="polite"></div>
+                <button type="submit" class="btn-primary">Registrar Proveedor y su Catálogo</button>
+            </div>
+        </form>
+    </section>
+</div>
+
+<script>
+    (function(){
+        // Elementos
+        const catalogoEl = document.getElementById('catalogo');
+        const addBtn = document.getElementById('btn-add-item');
+        const clearBtn = document.getElementById('btn-clear');
+        const generateBtn = document.getElementById('btn-generate');
+        const cantidadInput = document.getElementById('cantidad-productos');
+        const form = document.getElementById('proveedor-form');
+        const statusEl = document.getElementById('status');
+
+        // Crea una fila de catálogo
+        function crearCatalogoItem(nombre='', descripcion='', costo=''){
+            const wrapper = document.createElement('div');
+            wrapper.className = 'catalogo-item';
+
+            const nombreInput = document.createElement('input');
+            nombreInput.type = 'text';
+            nombreInput.name = 'nombreProducto';
+            nombreInput.placeholder = 'Nombre del producto';
+            nombreInput.value = nombre;
+            nombreInput.required = true;
+
+            const descInput = document.createElement('textarea');
+            descInput.name = 'descripcion';
+            descInput.className = 'input-desc';
+            descInput.placeholder = 'Descripción (opcional)';
+            descInput.value = descripcion;
+
+            const costoInput = document.createElement('input');
+            costoInput.type = 'number';
+            costoInput.name = 'costo';
+            costoInput.step = '0.01';
+            costoInput.placeholder = 'Costo';
+            costoInput.className = 'small';
+            costoInput.value = costo;
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'btn-remove';
+            removeBtn.textContent = 'X';
+            removeBtn.title = 'Eliminar producto';
+            removeBtn.addEventListener('click', () => wrapper.remove());
+
+            wrapper.appendChild(nombreInput);
+            wrapper.appendChild(descInput);
+            wrapper.appendChild(costoInput);
+            wrapper.appendChild(removeBtn);
+
+            catalogoEl.appendChild(wrapper);
+            return wrapper;
+        }
+
+        // Añadir inicial
+        crearCatalogoItem();
+
+        addBtn.addEventListener('click', () => crearCatalogoItem());
+
+        clearBtn.addEventListener('click', () => {
+            if (!confirm('¿Limpiar todo el catálogo?')) return;
+            catalogoEl.innerHTML = '';
+            crearCatalogoItem();
+        });
+
+        generateBtn.addEventListener('click', () => {
+            const n = parseInt(cantidadInput.value) || 0;
+            if (n < 1) { alert('Ingresa un número válido (>=1).'); return; }
+            catalogoEl.innerHTML = '';
+            for (let i=0;i<n;i++) crearCatalogoItem();
+        });
+
+        // Mostrar mensajes
+        function showStatus(msg, ok=true){
+            statusEl.textContent = msg;
+            statusEl.className = 'status ' + (ok ? 'success' : 'error');
+            statusEl.style.display = 'block';
+            // Oculta después de 5s salvo que sea error
+            if (ok) setTimeout(()=> statusEl.style.display = 'none', 5000);
+        }
+
+        // Envío del formulario
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            // Validaciones
+            const nombre = document.getElementById('nombre').value.trim();
+            const contacto = document.getElementById('contacto').value.trim();
+            if (!nombre) { showStatus('El nombre del proveedor es requerido.', false); return; }
+
+            // Recopilar catálogo
+            const filas = Array.from(catalogoEl.querySelectorAll('.catalogo-item'));
+            const catalogo = [];
+            filas.forEach(f => {
+                const nombreP = (f.querySelector('input[name="nombreProducto"]').value || '').trim();
+                const descripcion = (f.querySelector('textarea[name="descripcion"]').value || '').trim();
+                const costoVal = (f.querySelector('input[name="costo"]').value || '0').trim();
+                if (!nombreP) return; // saltar filas vacías
+                const costo = parseFloat(costoVal) || 0.0;
+                catalogo.push({ nombreProducto: nombreP, descripcion: descripcion, costo: costo });
+            });
+
+            if (catalogo.length === 0) { showStatus('Debes agregar al menos 1 producto al catálogo.', false); return; }
+
+            const payload = { nombre: nombre, contacto: contacto, catalogo: catalogo };
+
+            try {
+                // Enviamos JSON al servlet (tu ProveedoresServlet doPost espera JSON)
+                const res = await fetch('../proveedores', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+                    body: JSON.stringify(payload)
+                });
+
+                const text = await res.text();
+                // intentar parsear JSON (tu servlet devuelve JSON)
+                let body = {};
+                try { body = JSON.parse(text); } catch (err) { body = { message: text }; }
+
+                if (!res.ok) {
+                    showStatus(body.message || 'Error al registrar proveedor.', false);
+                    console.error('Error response:', body);
+                    return;
+                }
+
+                showStatus(body.message || 'Proveedor registrado correctamente.', true);
+                form.reset();
+                catalogoEl.innerHTML = '';
+                crearCatalogoItem();
+            } catch (err) {
+                console.error(err);
+                showStatus('Error de conexión. Inténtalo de nuevo.', false);
+            }
+        });
+    })();
+</script>
+</body>
+</html>

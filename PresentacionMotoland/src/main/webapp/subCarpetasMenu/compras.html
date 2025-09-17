@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Registro de Compras - MOTOLAND</title>
+    <link rel="stylesheet" href="../style.css" />
+    <style>
+        /* estilos mínimos para los sugeridores/autocomplete */
+        .autocomplete-list { position: absolute; background:#fff; border:1px solid #ddd; max-height:200px; overflow:auto; z-index:10000; width:100%; box-shadow:0 6px 18px rgba(0,0,0,0.08); border-radius:6px; }
+        .autocomplete-item { padding:8px 10px; cursor:pointer; }
+        .autocomplete-item:hover { background:#f1f5f9; }
+        .relative { position:relative; }
+        /* reuso tus estilos previos */
+        .form-section { background-color:#f9f9f9; padding:20px; border-radius:8px; margin-bottom:20px; box-shadow:0 2px 5px rgba(0,0,0,0.06); }
+        #detalles-compras-table { width:100%; border-collapse:collapse; margin-top: 12px; }
+        #detalles-compras-table th, #detalles-compras-table td { padding:10px; border:1px solid #e6e6e6; text-align:left; vertical-align:middle; }
+        #detalles-compras-table th { background:#003366; color:white; font-weight:600; }
+        #add-detail-btn, #submit-compra-btn { padding:10px 14px; border-radius:8px; border:none; background:#0b5fa5; color:white; cursor:pointer; }
+        .small-btn { padding:6px 10px; border-radius:6px; border:none; background:#dc3545; color:white; cursor:pointer; }
+        .ubicacion-grid { display:grid; grid-template-columns: 1fr 1fr 1fr; gap:6px; }
+        .ubicacion-preview { padding:6px 8px; background:#f1f5f9; border-radius:6px; text-align:center; font-weight:600; }
+        input[type="text"], input[type="number"], select { padding:8px; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; width:100%; }
+        .status-message { display:none; text-align:center; padding:12px; margin-top:12px; border-radius:8px; font-weight:600; }
+        .status-message.success { background:#d4edda; color:#155724; }
+        .status-message.error { background:#f8d7da; color:#721c24; }
+        @media (max-width:700px) { .ubicacion-grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header class="menu-header">
+        <h1>Registrar Compra</h1>
+        <button onclick="window.location.href='../menu.html'">Volver al Menú</button>
+    </header>
+
+    <form id="compra-form" novalidate>
+        <div class="form-section">
+            <h2>1. Datos de la Compra</h2>
+            <div class="form-group">
+                <label for="codigo-compra">Código de Compra (opcional):</label>
+                <input id="codigo-compra" name="codigo_compra" type="text" placeholder="Ej: COMPRA-123">
+            </div>
+
+            <!-- Autocomplete proveedor: input visible + hidden providerId -->
+            <div class="form-group relative" style="margin-top:10px;">
+                <label for="proveedor-input">Proveedor:</label>
+                <input id="proveedor-input" name="proveedor_display" type="text" placeholder="Escribe para buscar proveedor..." autocomplete="off">
+                <input id="proveedor-id" name="proveedorId" type="hidden" value="">
+                <div id="proveedor-suggestions" class="autocomplete-list" style="display:none"></div>
+            </div>
+
+            <div class="form-group" style="display:flex; gap:10px;">
+                <div style="flex:1">
+                    <label for="fecha-compra">Fecha:</label>
+                    <input id="fecha-compra" name="fecha_compra" type="datetime-local">
+                </div>
+                <div style="width:220px">
+                    <label for="estado-compra">Estado:</label>
+                    <select id="estado-compra" name="estado">
+                        <option value="Completada">Completada</option>
+                        <option value="Pendiente">Pendiente</option>
+                        <option value="Anulada">Anulada</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h2>2. Detalle de Productos</h2>
+            <table id="detalles-compras-table">
+                <thead>
+                <tr>
+                    <th>Producto (Código o Nombre)</th>
+                    <th>Cantidad</th>
+                    <th>Precio Unitario (Bs.)</th>
+                    <th>Ubicación (Zona / Rack / Altura)</th>
+                    <th>Vista Ubicación</th>
+                    <th>Acción</th>
+                </tr>
+                </thead>
+                <tbody id="detalles-compras-tbody"></tbody>
+            </table>
+            <div style="margin-top:10px;">
+                <button type="button" id="add-detail-btn">+ Añadir Línea</button>
+            </div>
+        </div>
+
+        <div class="form-section" style="text-align:center;">
+            <button id="submit-compra-btn" type="submit">Registrar Compra</button>
+            <div id="status-message" class="status-message"></div>
+        </div>
+    </form>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const proveedorInput = document.getElementById('proveedor-input');
+        const proveedorIdInput = document.getElementById('proveedor-id');
+        const proveedorSuggestions = document.getElementById('proveedor-suggestions');
+        const detallesTbody = document.getElementById('detalles-compras-tbody');
+        const addDetailBtn = document.getElementById('add-detail-btn');
+        const compraForm = document.getElementById('compra-form');
+        const statusMessage = document.getElementById('status-message');
+
+        // Datos cargados desde servidor
+        let proveedoresList = [];      // {id, nombre}
+        let catalogoProveedor = [];    // catálogo del proveedor seleccionado: {id, nombre_producto, costo, ubicacion?}
+
+        // Cargar proveedores al inicio (GET /compras devuelve lista de proveedores cuando no se pasa proveedorId)
+        fetch('../compras')
+            .then(r => r.ok ? r.json() : Promise.reject('No providers'))
+            .then(data => proveedoresList = Array.isArray(data) ? data : [])
+            .catch(err => { console.warn('No se pudieron cargar proveedores:', err); proveedoresList = []; });
+
+        // Filtrar y mostrar sugerencias para proveedores
+        function showProveedorSuggestions(filter) {
+            const q = (filter || '').trim().toLowerCase();
+            proveedorSuggestions.innerHTML = '';
+            if (!q) { proveedorSuggestions.style.display = 'none'; return; }
+            const matches = proveedoresList.filter(p => p.nombre.toLowerCase().includes(q) || String(p.id).startsWith(q)).slice(0, 20);
+            if (matches.length === 0) { proveedorSuggestions.style.display = 'none'; return; }
+            matches.forEach(m => {
+                const div = document.createElement('div');
+                div.className = 'autocomplete-item';
+                div.textContent = `${m.nombre} (${m.id})`;
+                div.dataset.proveedorId = m.id;
+                div.dataset.proveedorNombre = m.nombre;
+                div.addEventListener('click', () => {
+                    proveedorInput.value = m.nombre;
+                    proveedorIdInput.value = m.id;
+                    proveedorSuggestions.style.display = 'none';
+                    // cuando seleccionan proveedor, cargamos catálogo
+                    loadCatalogoDelProveedor(m.id);
+                });
+                proveedorSuggestions.appendChild(div);
+            });
+            proveedorSuggestions.style.display = 'block';
+        }
+
+        proveedorInput.addEventListener('input', (e) => {
+            proveedorIdInput.value = ''; // borrar id al editar
+            showProveedorSuggestions(e.target.value);
+        });
+
+        // cerrar suggestions al click fuera
+        document.addEventListener('click', (ev) => {
+            if (!proveedorSuggestions.contains(ev.target) && ev.target !== proveedorInput) proveedorSuggestions.style.display = 'none';
+        });
+
+        // Cargar catálogo del proveedor seleccionado desde backend: GET /compras?proveedorId=ID
+        function loadCatalogoDelProveedor(proveedorId) {
+            catalogoProveedor = [];
+            if (!proveedorId) return;
+            fetch(`../compras?proveedorId=${encodeURIComponent(proveedorId)}`)
+                .then(r => r.ok ? r.json() : Promise.reject('error catalogo'))
+                .then(data => {
+                    catalogoProveedor = Array.isArray(data) ? data : [];
+                    // opcional: notificar si catálogo vacío
+                    if (catalogoProveedor.length === 0) {
+                        console.info('Proveedor seleccionado sin catálogo registrado');
+                    }
+                })
+                .catch(err => {
+                    console.warn('No se pudo cargar catálogo del proveedor', err);
+                    catalogoProveedor = [];
+                });
+        }
+
+        // helpers para selects de ubicación
+        function crearSelectZona() {
+            const s = document.createElement('select'); s.name = 'ubicacion_zona';
+            const ph = document.createElement('option'); ph.value=''; ph.textContent='Zona'; s.appendChild(ph);
+            for (let i=1;i<=4;i++){ const o=document.createElement('option'); o.value=String(i); o.textContent='P'+i; s.appendChild(o); }
+            return s;
+        }
+        function crearSelectRack() {
+            const s = document.createElement('select'); s.name = 'ubicacion_rack';
+            const ph = document.createElement('option'); ph.value=''; ph.textContent='Rack'; s.appendChild(ph);
+            for (let i=1;i<=50;i++){ const o=document.createElement('option'); o.value=String(i); o.textContent='R'+i; s.appendChild(o); }
+            return s;
+        }
+        function crearSelectAltura() {
+            const s = document.createElement('select'); s.name = 'ubicacion_altura';
+            const ph = document.createElement('option'); ph.value=''; ph.textContent='Altura'; s.appendChild(ph);
+            ['A','B','C','D','E'].forEach(l => { const o=document.createElement('option'); o.value=l; o.textContent=l; s.appendChild(o); });
+            return s;
+        }
+
+        // crear fila detalle con autocompletado de producto a partir del catalogoProveedor actual
+        function crearRow() {
+            const tr = document.createElement('tr');
+
+            // Producto input + suggestions
+            const tdProd = document.createElement('td');
+            const wrapper = document.createElement('div'); wrapper.className='relative';
+            const inpProd = document.createElement('input');
+            inpProd.type = 'text'; inpProd.name = 'producto'; inpProd.placeholder = 'Código o nombre'; inpProd.autocomplete = 'off';
+            inpProd.required = true;
+            // hidden para guardar catalogo id si viene
+            const inpCatalogId = document.createElement('input'); inpCatalogId.type='hidden'; inpCatalogId.name='catalogoId';
+            const sugerencias = document.createElement('div'); sugerencias.className='autocomplete-list'; sugerencias.style.display='none';
+            wrapper.appendChild(inpProd); wrapper.appendChild(inpCatalogId); wrapper.appendChild(sugerencias);
+            tdProd.appendChild(wrapper);
+
+            // Cantidad
+            const tdCant = document.createElement('td');
+            const inpCant = document.createElement('input'); inpCant.type='number'; inpCant.name='cantidad'; inpCant.min='1'; inpCant.value='1';
+            tdCant.appendChild(inpCant);
+
+            // Precio unitario
+            const tdPrecio = document.createElement('td');
+            const inpPrecio = document.createElement('input'); inpPrecio.type='number'; inpPrecio.name='precio_unitario'; inpPrecio.step='0.01'; inpPrecio.value='0.00';
+            tdPrecio.appendChild(inpPrecio);
+
+            // Ubicación selects
+            const tdUbic = document.createElement('td');
+            const ubicContainer = document.createElement('div'); ubicContainer.className='ubicacion-grid';
+            const selZ = crearSelectZona(); const selR = crearSelectRack(); const selA = crearSelectAltura();
+            ubicContainer.appendChild(selZ); ubicContainer.appendChild(selR); ubicContainer.appendChild(selA);
+            tdUbic.appendChild(ubicContainer);
+
+            // Preview
+            const tdPrev = document.createElement('td');
+            const prevDiv = document.createElement('div'); prevDiv.className='ubicacion-preview'; prevDiv.textContent='';
+            tdPrev.appendChild(prevDiv);
+
+            // Acción
+            const tdAcc = document.createElement('td');
+            const removeBtn = document.createElement('button'); removeBtn.type='button'; removeBtn.className='small-btn'; removeBtn.textContent='Quitar';
+            removeBtn.addEventListener('click', () => tr.remove());
+            tdAcc.appendChild(removeBtn);
+
+            // Eventos
+            function updatePreview() {
+                const z = selZ.value, r = selR.value, a = selA.value;
+                if (!z && !r && !a) prevDiv.textContent = '';
+                else if (!z || !r || !a) prevDiv.textContent = 'Incompleta';
+                else prevDiv.textContent = `P${z}/R${r}/${a}`;
+            }
+            selZ.addEventListener('change', updatePreview);
+            selR.addEventListener('change', updatePreview);
+            selA.addEventListener('change', updatePreview);
+
+            // Autocomplete productos solo del catálogo del proveedor seleccionado
+            inpProd.addEventListener('input', (e) => {
+                sugerencias.innerHTML = '';
+                const q = (e.target.value || '').trim().toLowerCase();
+                if (!q || catalogoProveedor.length === 0) { sugerencias.style.display = 'none'; return; }
+                // buscar coincidencias por nombre_producto o id
+                const matches = catalogoProveedor.filter(p =>
+                    p.nombre_producto.toLowerCase().includes(q) ||
+                    String(p.id).startsWith(q)
+                ).slice(0, 20);
+                if (matches.length === 0) { sugerencias.style.display = 'none'; return; }
+                matches.forEach(m => {
+                    const div = document.createElement('div');
+                    div.className = 'autocomplete-item';
+                    const costo = (typeof m.costo !== 'undefined' ? Number(m.costo).toFixed(2) : '');
+                    div.innerHTML = `<strong>${m.nombre_producto}</strong> &nbsp; <small style="color:#666">Bs. ${costo}</small>`;
+                    div.dataset.catalogId = m.id;
+                    div.dataset.nombre = m.nombre_producto;
+                    div.dataset.costo = m.costo;
+                    if (m.ubicacion) div.dataset.ubicacion = m.ubicacion;
+                    div.addEventListener('click', () => {
+                        // set valores en la fila
+                        inpProd.value = m.nombre_producto;
+                        inpCatalogId.value = m.id;
+                        if (typeof m.costo !== 'undefined') inpPrecio.value = Number(m.costo).toFixed(2);
+                        // si el catálogo trae ubicacion (ej P1/R3/A) la parseamos y seteamos selects
+                        if (m.ubicacion) {
+                            const u = String(m.ubicacion).trim();
+                            const parts = u.split('/');
+                            // esperar formato Px / Rx / A
+                            try {
+                                if (parts.length === 3) {
+                                    const p = parts[0].replace(/^P/i,'').trim();
+                                    const r = parts[1].replace(/^R/i,'').trim();
+                                    const a = parts[2].trim();
+                                    if (p) selZ.value = p;
+                                    if (r) selR.value = r;
+                                    if (a) selA.value = a;
+                                    updatePreview();
+                                }
+                            } catch(e) { /* ignorar parse errors */ }
+                        }
+                        sugerencias.style.display = 'none';
+                    });
+                    sugerencias.appendChild(div);
+                });
+                sugerencias.style.display = 'block';
+            });
+
+            // click fuera cierra sugerencias
+            document.addEventListener('click', (ev) => {
+                if (!sugerencias.contains(ev.target) && ev.target !== inpProd) sugerencias.style.display = 'none';
+            });
+
+            // si el usuario pega un valor y sale (`change`) intentamos autoseleccionar si hay match exacto
+            inpProd.addEventListener('change', () => {
+                const val = (inpProd.value || '').trim();
+                if (!val) return;
+                const exact = catalogoProveedor.find(p => p.nombre_producto.toLowerCase() === val.toLowerCase() || String(p.id) === val);
+                if (exact) {
+                    inpCatalogId.value = exact.id;
+                    if (typeof exact.costo !== 'undefined') inpPrecio.value = Number(exact.costo).toFixed(2);
+                    if (exact.ubicacion) {
+                        const parts = String(exact.ubicacion).split('/');
+                        if (parts.length===3) { selZ.value = parts[0].replace(/^P/i,''); selR.value = parts[1].replace(/^R/i,''); selA.value = parts[2]; }
+                    }
+                } else {
+                    // si no hay match, limp el catalogoId
+                    inpCatalogId.value = '';
+                }
+            });
+
+            // append celdas
+            tr.appendChild(tdProd); tr.appendChild(tdCant); tr.appendChild(tdPrecio); tr.appendChild(tdUbic); tr.appendChild(tdPrev); tr.appendChild(tdAcc);
+            return tr;
+        }
+
+        // botón añadir linea
+        addDetailBtn.addEventListener('click', () => {
+            const row = crearRow();
+            detallesTbody.appendChild(row);
+            row.querySelector('input[name="producto"]').focus();
+            window.scrollTo({ top: row.offsetTop - 100, behavior: 'smooth' });
+        });
+
+        // agregar una fila inicial
+        detallesTbody.appendChild(crearRow());
+
+        // validar ubicacion fila
+        function validarUbicacionFila(tr) {
+            const z = tr.querySelector('select[name="ubicacion_zona"]').value;
+            const r = tr.querySelector('select[name="ubicacion_rack"]').value;
+            const a = tr.querySelector('select[name="ubicacion_altura"]').value;
+            if (!z && !r && !a) return true;
+            if (!z || !r || !a) return false;
+            const znum = parseInt(z,10), rnum = parseInt(r,10);
+            if (Number.isNaN(znum) || znum < 1 || znum > 4) return false;
+            if (Number.isNaN(rnum) || rnum < 1 || rnum > 50) return false;
+            if (!['A','B','C','D','E'].includes(String(a).toUpperCase())) return false;
+            return true;
+        }
+
+        // serializar detalles
+        function serializarDetalles() {
+            const filas = Array.from(detallesTbody.querySelectorAll('tr'));
+            const datos = [];
+            for (const tr of filas) {
+                const producto = (tr.querySelector('input[name="producto"]').value || '').trim();
+                const cantidad = parseInt(tr.querySelector('input[name="cantidad"]').value,10) || 0;
+                const precio_unitario = parseFloat(tr.querySelector('input[name="precio_unitario"]').value) || 0;
+                const z = tr.querySelector('select[name="ubicacion_zona"]').value;
+                const r = tr.querySelector('select[name="ubicacion_rack"]').value;
+                const a = tr.querySelector('select[name="ubicacion_altura"]').value;
+                const ubicacion = (z && r && a) ? `P${z}/R${r}/${a}` : null;
+                datos.push({ nombreProducto: producto, cantidad, costoUnitario: precio_unitario, ubicacion });
+            }
+            return datos;
+        }
+
+        compraForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+
+            // validar proveedorId
+            const proveedorId = proveedorIdInput.value ? parseInt(proveedorIdInput.value, 10) : null;
+            if (!proveedorId) {
+                alert('Selecciona un proveedor válido desde la lista (escribe y selecciona).');
+                return;
+            }
+
+            // validar filas
+            const filas = Array.from(detallesTbody.querySelectorAll('tr'));
+            if (filas.length === 0) { alert('Añade al menos una línea de detalle.'); return; }
+
+            for (const tr of filas) {
+                const producto = (tr.querySelector('input[name="producto"]').value || '').trim();
+                const cantidad = parseInt(tr.querySelector('input[name="cantidad"]').value,10) || 0;
+                const precio_unitario = parseFloat(tr.querySelector('input[name="precio_unitario"]').value) || 0;
+                if (!producto) { alert('Hay una línea sin producto.'); return; }
+                if (cantidad <= 0) { alert('La cantidad debe ser mayor a 0 en todas las líneas.'); return; }
+                if (precio_unitario < 0) { alert('Precio unitario inválido.'); return; }
+                if (!validarUbicacionFila(tr)) { alert('Hay una ubicación incompleta en una línea. Llena Zona,Rack y Altura o déjalas todas vacías.'); return; }
+            }
+
+            // construir payload (ComprasServlet espera proveedorId y detalles en items)
+            const payload = {
+                proveedorId: proveedorId,
+                codigo_compra: (document.getElementById('codigo-compra').value || '').trim() || null,
+                fecha_compra: (document.getElementById('fecha-compra').value || '') || null,
+                estado: (document.getElementById('estado-compra').value || 'Completada'),
+                items: serializarDetalles()
+            };
+
+            fetch('../compras', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json; charset=utf-8' },
+                body: JSON.stringify(payload)
+            })
+                .then(r => r.json().catch(()=>({ status:'error', message:'Respuesta no JSON' })))
+                .then(res => {
+                    if (res.status === 'success' || res.status === 200) {
+                        statusMessage.textContent = res.message || 'Compra registrada correctamente.';
+                        statusMessage.className = 'status-message success';
+                        statusMessage.style.display = 'block';
+                        compraForm.reset();
+                        detallesTbody.innerHTML = '';
+                        detallesTbody.appendChild(crearRow());
+                        proveedorIdInput.value = '';
+                        catalogoProveedor = [];
+                    } else {
+                        statusMessage.textContent = res.message || 'Error al registrar la compra.';
+                        statusMessage.className = 'status-message error';
+                        statusMessage.style.display = 'block';
+                    }
+                    setTimeout(()=> statusMessage.style.display = 'none', 5000);
+                })
+                .catch(err => {
+                    console.error(err);
+                    statusMessage.textContent = 'Error de conexión al enviar la compra.';
+                    statusMessage.className = 'status-message error';
+                    statusMessage.style.display = 'block';
+                    setTimeout(()=> statusMessage.style.display = 'none', 5000);
+                });
+        });
+
+    });
+</script>
+</body>
+</html>

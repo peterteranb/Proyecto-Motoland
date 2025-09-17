@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clientes - MOTOLAND</title>
+  <link rel="stylesheet" href="../style.css">
+
+  <style>
+    #clientes-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    #clientes-table th, #clientes-table td {
+      padding: 12px 15px;
+      border: 1px solid #ddd;
+      text-align: left;
+    }
+    #clientes-table th {
+      background-color: #003366;
+      color: white;
+    }
+    #clientes-table tbody tr:nth-of-type(even) {
+      background-color: #f9f9f9;
+    }
+    .form-container {
+      background-color: #f9f9f9;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 30px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .status-message {
+      padding: 10px;
+      margin-top: 15px;
+      border-radius: 5px;
+      text-align: center;
+      display: none; /* Oculto por defecto */
+    }
+    .status-message.success {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .status-message.error {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header class="menu-header">
+    <h1>Gestión de Clientes</h1>
+    <button onclick="window.location.href='../menu.html'">Volver al Menú</button>
+  </header>
+
+  <div class="form-container">
+    <form id="cliente-form">
+      <h2>Registrar Nuevo Cliente</h2>
+      <div class="form-group">
+        <label for="nombre">Nombre:</label>
+        <input type="text" id="nombre" name="nombre" required>
+      </div>
+      <div class="form-group">
+        <label for="contacto">Contacto (Teléfono/Email):</label>
+        <input type="text" id="contacto" name="contacto" required>
+      </div>
+      <div class="form-group">
+        <label for="direccion">Dirección:</label>
+        <input type="text" id="direccion" name="direccion" required>
+      </div>
+      <button type="submit">Guardar Cliente</button>
+    </form>
+    <div id="status-message" class="status-message"></div>
+  </div>
+
+  <div class="lista-clientes">
+    <h2>Clientes Registrados</h2>
+    <table id="clientes-table">
+      <thead>
+      <tr>
+        <th>Nombre</th>
+        <th>Contacto</th>
+        <th>Dirección</th>
+      </tr>
+      </thead>
+      <tbody>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  // --- FUNCIÓN PARA CARGAR LA LISTA DE CLIENTES ---
+  function cargarClientes() {
+    fetch('../clientes') // Apuntamos al nuevo servlet de clientes
+            .then(response => response.json())
+            .then(data => {
+              const tbody = document.querySelector('#clientes-table tbody');
+              tbody.innerHTML = '';
+              data.forEach(cliente => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                        <td>${cliente.nombre}</td>
+                        <td>${cliente.contacto}</td>
+                        <td>${cliente.direccion}</td>
+                    `;
+                tbody.appendChild(row);
+              });
+            })
+            .catch(error => {
+              console.error('Error al cargar los clientes:', error);
+            });
+  }
+
+  // --- CÓDIGO QUE SE EJECUTA AL CARGAR LA PÁGINA ---
+  document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('cliente-form');
+    const statusMessage = document.getElementById('status-message');
+
+    // 1. Cargar la lista inicial de clientes
+    cargarClientes();
+
+    // 2. Escuchar el evento 'submit' del formulario para registrar nuevos clientes
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+
+      const formData = new FormData(form);
+
+      fetch('../clientes', { // Enviamos los datos al mismo servlet
+        method: 'POST',
+        body: new URLSearchParams(formData)
+      })
+              .then(response => response.json())
+              .then(data => {
+                statusMessage.textContent = data.message;
+                if (data.status === 'success') {
+                  statusMessage.className = 'status-message success';
+                  form.reset();
+                  cargarClientes(); // Recargamos la tabla para ver el nuevo cliente
+                } else {
+                  statusMessage.className = 'status-message error';
+                }
+                statusMessage.style.display = 'block';
+
+                setTimeout(() => {
+                  statusMessage.style.display = 'none';
+                }, 3000);
+              })
+              .catch(error => {
+                console.error('Error al registrar el cliente:', error);
+                statusMessage.textContent = 'Error de conexión. No se pudo registrar.';
+                statusMessage.className = 'status-message error';
+                statusMessage.style.display = 'block';
+              });
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Facturación - MOTOLAND</title>
+    <link rel="icon" href="https://i.ibb.co/L5MvV2M/logo.png">
+    <style>
+        /* Fuente moderna */
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+
+        :root{
+            --bg:#f4f7f9;
+            --card:#ffffff;
+            --primary:#003366;
+            --accent:#0b66c3;
+            --danger:#d9534f;
+            --muted:#6c757d;
+            --radius:12px;
+            --shadow: 0 10px 30px rgba(15,23,42,0.08);
+            --glass: rgba(255,255,255,0.6);
+        }
+
+        *{box-sizing:border-box}
+        html,body{height:100%;}
+        body{
+            margin:0;
+            font-family: 'Poppins', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+            background: linear-gradient(180deg,var(--bg) 0%, #eef3f6 100%);
+            color: #222;
+            -webkit-font-smoothing:antialiased;
+            -moz-osx-font-smoothing:grayscale;
+            padding:40px 20px;
+            display:flex;
+            justify-content:center;
+            align-items:flex-start;
+        }
+
+        .page{
+            width:100%;
+            max-width:1100px;
+        }
+
+        /* header con título centrado y botón a la derecha (estilo consistente) */
+        .header-row{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            margin-bottom:28px;
+        }
+        .header-row h1{ color:var(--primary); font-size:32px; margin:0 0 6px; text-align:left; }
+        .volver-menu{
+            background:#d9534f;
+            color:#fff;
+            border:none;
+            padding:10px 18px;
+            border-radius:20px;
+            font-weight:700;
+            cursor:pointer;
+            box-shadow: 0 6px 14px rgba(217,83,79,0.18);
+        }
+        .volver-menu:active{ transform:translateY(1px); }
+
+        .layout{
+            display:grid;
+            grid-template-columns: 360px 1fr;
+            gap:28px;
+            align-items:start;
+        }
+
+        /* Card base */
+        .card{
+            background:var(--card);
+            border-radius:var(--radius);
+            box-shadow:var(--shadow);
+            padding:22px;
+            border:1px solid rgba(12,20,30,0.03);
+        }
+
+        /* Left panel (search) */
+        .search-card{ display:flex; flex-direction:column; gap:12px; }
+        .search-card h2{ font-size:20px; margin:0; color:var(--primary); text-align:left }
+        .hint{ font-size:13px; color:var(--muted); }
+
+        label{ display:block; font-weight:600; margin-bottom:8px; }
+        input[type="text"], input[type="number"], select, textarea{
+            width:100%; padding:12px 14px; border-radius:10px; border:1px solid #e3e7ea; font-size:15px;
+            background:#fff; color:#222;
+        }
+        input:focus, select:focus{ outline:none; box-shadow: 0 6px 18px rgba(11,102,195,0.07); border-color:var(--accent); }
+
+        .btn-primary{ background:var(--primary); color:#fff; border:none; padding:12px 16px; border-radius:10px; font-weight:700; cursor:pointer; width:100%; }
+        .btn-primary:disabled{ opacity:0.5; cursor:not-allowed }
+        .btn-secondary{ background:transparent; color:var(--primary); border:1px solid rgba(0,0,0,0.06); padding:10px 14px; border-radius:10px; cursor:pointer; font-weight:600 }
+        .btn-danger{ background:var(--danger); color:#fff; border:none; padding:8px 10px; border-radius:8px; }
+
+        /* Right panel: invoice preview */
+        .invoice-card{ padding:18px 20px; }
+        .invoice-header{ display:flex; justify-content:space-between; gap:12px; align-items:flex-start; border-bottom:1px solid #eef2f5; padding-bottom:10px; margin-bottom:14px }
+        .invoice-header h2{ font-size:18px; margin:0; color:var(--primary); }
+        .invoice-details p{ margin:4px 0; color:var(--muted); font-size:14px }
+
+        table{ width:100%; border-collapse:collapse; font-size:14px }
+        th, td{ padding:12px 10px; border-bottom:1px solid #f3f6f8; text-align:left }
+        th{ background:transparent; color:var(--primary); font-weight:700; }
+        td.right, th.right{ text-align:right }
+        tbody tr:nth-child(even){ background:#fbfdff }
+
+        #additional-items-table input, #additional-items-table select{ padding:8px 10px; font-size:14px }
+
+        .totals{ margin-top:14px; display:flex; flex-direction:column; gap:8px; align-items:flex-end }
+        .totals .row{ width:100%; display:flex; justify-content:space-between; color:#111; font-weight:600 }
+        .totals .grand{ font-size:18px; color:var(--primary) }
+
+        .actions{ margin-top:18px; display:flex; gap:12px; justify-content:flex-end }
+
+        .status{ margin-top:12px; padding:12px; border-radius:10px; display:none }
+        .status.success{ display:block; background:#e6fbf1; color:#0a6a3a }
+        .status.error{ display:block; background:#fff0f0; color:#8a1f1f }
+
+        /* Responsive */
+        @media (max-width:980px){
+            .layout{ grid-template-columns: 1fr; }
+            .header-row h1{ font-size:26px }
+        }
+
+        /* Print friendly for conformity sheet (kept minimal) */
+        @media print{
+            body{ background:#fff; padding:0 }
+            .layout, header{ display:none }
+            #invoice-preview{ box-shadow:none; border:none }
+        }
+    </style>
+</head>
+<body>
+<div class="page">
+    <div class="header-row">
+        <h1>Módulo de Facturación</h1>
+        <button class="volver-menu" onclick="window.location.href='../menu.html'">Volver al Menú</button>
+    </div>
+
+    <div class="layout">
+        <aside class="card search-card">
+            <h2>Buscar Venta para Facturar</h2>
+            <p class="hint">Ingresa el código exacto (ej. <em>VENTA-123</em>)</p>
+            <form id="search-form">
+                <div>
+                    <label for="codigo-venta-search">Código de Venta</label>
+                    <input id="codigo-venta-search" type="text" placeholder="VENTA-..." required>
+                </div>
+                <div style="margin-top:10px">
+                    <button class="btn-primary" type="submit">Buscar Venta</button>
+                </div>
+            </form>
+            <div id="search-status" class="status" aria-live="polite"></div>
+
+            <div style="margin-top:14px; font-size:13px; color:var(--muted)">Puedes agregar ítems adicionales (envío, descuentos manuales) una vez cargada la venta.</div>
+        </aside>
+
+        <section id="invoice-section" class="card invoice-card" style="display:none">
+            <div id="invoice-preview">
+                <div class="invoice-header">
+                    <div>
+                        <h2>FACTURA</h2>
+                        <div class="invoice-details">
+                            <p><strong>Venta Original:</strong> <span id="venta-codigo"></span></p>
+                            <p><strong>Fecha Venta:</strong> <span id="venta-fecha"></span></p>
+                            <p><strong>Cliente:</strong> <span id="venta-cliente"></span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <h3 style="margin:6px 0 8px; color:var(--muted)">Productos Vendidos</h3>
+                <table id="productos-table">
+                    <thead>
+                    <tr>
+                        <th>Producto</th>
+                        <th>Ubicación</th>
+                        <th class="right">Cantidad</th>
+                        <th class="right">Precio Unit.</th>
+                        <th class="right">Subtotal</th>
+                    </tr>
+                    </thead>
+                    <tbody id="productos-tbody"></tbody>
+                </table>
+
+                <h3 style="margin:12px 0 8px; color:var(--muted)">Ítems Adicionales y Deducciones</h3>
+                <table id="additional-items-table">
+                    <thead>
+                    <tr>
+                        <th>Descripción</th>
+                        <th class="right">Cantidad</th>
+                        <th class="right">Monto Unit.</th>
+                        <th class="right">Tipo</th>
+                        <th>Acción</th>
+                    </tr>
+                    </thead>
+                    <tbody id="additional-items-tbody"></tbody>
+                </table>
+                <div style="margin-top:10px"><button id="add-item-btn" class="btn-secondary">+ Añadir Ítem</button></div>
+
+                <div class="totals">
+                    <div class="row"><div>Subtotal Productos:</div><div id="summary-subtotal-productos">0.00</div></div>
+                    <div class="row"><div>Total Adicionales/Deducciones:</div><div id="summary-total-adicionales">0.00</div></div>
+
+                    <div style="width:100%; display:flex; gap:12px; justify-content:flex-end; align-items:center">
+                        <label for="descuento-global" style="margin:0; font-weight:600;">Descuento Global (Bs.)</label>
+                        <input id="descuento-global" type="number" value="0.00" step="0.01" style="width:140px; text-align:right">
+                        <label for="tasa-impuesto" style="margin:0; font-weight:600;">Tasa de Impuesto (%)</label>
+                        <input id="tasa-impuesto" type="number" value="13.00" step="0.01" style="width:140px; text-align:right">
+                    </div>
+
+                    <div class="row"><div>Monto Impuestos:</div><div id="summary-impuestos">0.00</div></div>
+                    <div class="row grand"><div>TOTAL A PAGAR (Bs.)</div><div id="summary-total-final">0.00</div></div>
+                </div>
+
+                <div class="actions">
+                    <button id="generate-invoice-btn" class="btn-primary">Guardar Factura</button>
+                    <button id="print-conformity-btn" class="btn-secondary">Imprimir Hoja de Conformidad</button>
+                    <button id="print-invoice-btn" class="btn-secondary">Imprimir Factura</button>
+                </div>
+
+                <div id="final-status" class="status" aria-live="polite"></div>
+            </div>
+        </section>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const searchForm = document.getElementById('search-form');
+        const searchStatus = document.getElementById('search-status');
+        const invoiceSection = document.getElementById('invoice-section');
+        const additionalItemsTbody = document.getElementById('additional-items-tbody');
+        const addItemBtn = document.getElementById('add-item-btn');
+        const generateInvoiceBtn = document.getElementById('generate-invoice-btn');
+        const printConformityBtn = document.getElementById('print-conformity-btn');
+        const printInvoiceBtn = document.getElementById('print-invoice-btn');
+
+        let currentVenta = null;
+
+        searchForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const codigoVenta = document.getElementById('codigo-venta-search').value.trim();
+            if(!codigoVenta){
+                searchStatus.className='status error'; searchStatus.textContent='Ingrese un código de venta'; return;
+            }
+
+            fetch(`../facturacion?codigoVenta=${encodeURIComponent(codigoVenta)}`)
+                .then(response => {
+                    if(!response.ok) return response.json().then(err=>{throw new Error(err.message||'Error en servidor')});
+                    return response.json();
+                })
+                .then(data=>{
+                    currentVenta = data;
+                    populateInvoiceData(data);
+                    invoiceSection.style.display='block';
+                    searchStatus.style.display='none';
+                    window.scrollTo({top:0, behavior:'smooth'});
+                })
+                .catch(err=>{
+                    searchStatus.className='status error'; searchStatus.style.display='block'; searchStatus.textContent=err.message || 'Venta no encontrada';
+                    invoiceSection.style.display='none';
+                });
+        });
+
+        function populateInvoiceData(data){
+            document.getElementById('venta-codigo').textContent = data.codigoVenta || '';
+            document.getElementById('venta-fecha').textContent = data.fechaVenta ? new Date(data.fechaVenta).toLocaleString() : '';
+            document.getElementById('venta-cliente').textContent = data.clienteNombre || '';
+
+            const productosTbody = document.getElementById('productos-tbody'); productosTbody.innerHTML='';
+            (data.productos||[]).forEach(p=>{
+                const tr=document.createElement('tr');
+                // mostramos ubicacion en columna aparte
+                tr.innerHTML=
+                    `<td>${p.nombre||''}</td>
+                   <td>${p.ubicacion || ''}</td>
+                   <td class="right">${p.cantidad||0}</td>
+                   <td class="right">${(p.precioUnitario||0).toFixed(2)}</td>
+                   <td class="right">${(p.subtotal||0).toFixed(2)}</td>`;
+                productosTbody.appendChild(tr);
+            });
+            additionalItemsTbody.innerHTML='';
+            recalculateTotals();
+        }
+
+        addItemBtn.addEventListener('click', ()=>{
+            const row=document.createElement('tr');
+            row.innerHTML=`<td><input class="item-descripcion" type="text" placeholder="Ej: Costo de envío"></td><td class="right"><input class="item-cantidad" type="number" value="1" min="1"></td><td class="right"><input class="item-monto" type="number" value="0.00" step="0.01"></td><td class="right"><select class="item-tipo"><option value="ADICION">Suma (+)</option><option value="DEDUCCION">Resta (-)</option></select></td><td><button class="remove-item btn-danger">X</button></td>`;
+            additionalItemsTbody.appendChild(row);
+        });
+
+        additionalItemsTbody.addEventListener('click', (e)=>{
+            if(e.target.classList.contains('remove-item')){ e.target.closest('tr').remove(); recalculateTotals(); }
+        });
+
+        invoiceSection.addEventListener('input',(e)=>{
+            if(['descuento-global','tasa-impuesto'].includes(e.target.id) || e.target.classList.contains('item-cantidad') || e.target.classList.contains('item-monto') || e.target.classList.contains('item-tipo')) recalculateTotals();
+        });
+
+        function recalculateTotals(){
+            if(!currentVenta) return;
+            const subtotalProductos=(currentVenta.productos||[]).reduce((s,p)=>s+(p.subtotal||0),0);
+            document.getElementById('summary-subtotal-productos').textContent=subtotalProductos.toFixed(2);
+
+            let totalAdicionales=0;
+            document.querySelectorAll('#additional-items-tbody tr').forEach(row=>{
+                const cantidad=parseFloat(row.querySelector('.item-cantidad').value)||0;
+                const monto=parseFloat(row.querySelector('.item-monto').value)||0;
+                const tipo=row.querySelector('.item-tipo').value; const sub=cantidad*monto;
+                totalAdicionales += (tipo==='ADICION'? sub : -sub);
+            });
+            document.getElementById('summary-total-adicionales').textContent=totalAdicionales.toFixed(2);
+
+            const descuentoGlobal=parseFloat(document.getElementById('descuento-global').value)||0;
+            const tasaImpuesto=parseFloat(document.getElementById('tasa-impuesto').value)||0;
+            const base=subtotalProductos+totalAdicionales-descuentoGlobal;
+            const impuestos=Math.max(0,base)*(tasaImpuesto/100);
+            document.getElementById('summary-impuestos').textContent=impuestos.toFixed(2);
+            document.getElementById('summary-total-final').textContent=(base+impuestos).toFixed(2);
+        }
+
+        generateInvoiceBtn.addEventListener('click', ()=>{
+            if(!currentVenta) return alert('Primero carga una venta');
+            const items=[];
+            document.querySelectorAll('#additional-items-tbody tr').forEach(row=>{
+                items.push({ descripcion: row.querySelector('.item-descripcion').value, cantidad: parseInt(row.querySelector('.item-cantidad').value)||0, montoUnitario: parseFloat(row.querySelector('.item-monto').value)||0, tipo: row.querySelector('.item-tipo').value });
+            });
+            const factura={ ventaId: currentVenta.ventaId, tasaImpuesto: parseFloat(document.getElementById('tasa-impuesto').value)||0, descuentoGlobal: parseFloat(document.getElementById('descuento-global').value)||0, itemsAdicionales: items };
+            fetch('../facturacion',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(factura) })
+                .then(res=>res.json().then(b=>({status:res.status, body:b})))
+                .then(({status, body})=>{
+                    const fs=document.getElementById('final-status'); fs.className='status '+(status===200? 'success':'error'); fs.textContent=body.message|| (status===200? 'Factura guardada.':'Error al guardar'); if(status===200){ generateInvoiceBtn.disabled=true; document.getElementById('search-form').reset(); }
+                }).catch(err=>{ const fs=document.getElementById('final-status'); fs.className='status error'; fs.textContent=err.message||'Error de conexión'; });
+        });
+
+        // Hoja de conformidad (simplificada) — ahora incluye ubicacion en la tabla si existe
+        printConformityBtn.addEventListener('click', ()=>{
+            if(!currentVenta) return;
+            let productosHtml='';
+            (currentVenta.productos||[]).forEach(p=>{
+                productosHtml+=`<tr>
+                    <td style="text-align:center">${p.cantidad||0}</td>
+                    <td>${p.nombre||''}</td>
+                    <td>${p.ubicacion || ''}</td>
+                    <td>..................</td>
+                </tr>`;
+            });
+            const w=window.open('','_blank');
+            w.document.write(`<html><head><title>Hoja de Conformidad</title><style>body{font-family:Arial;margin:30px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:8px}</style></head><body><h1>Hoja de Conformidad</h1><p><strong>Cliente:</strong> ${currentVenta.clienteNombre||''}</p><p><strong>Referencia:</strong> ${currentVenta.codigoVenta||''}</p><table><thead><tr><th>Cantidad</th><th>Producto</th><th>Ubicación</th><th>Revisado (OK)</th></tr></thead><tbody>${productosHtml}</tbody></table><div style="margin-top:40px">Firma: ____________________</div></body></html>`);
+            w.document.close(); w.print();
+        });
+
+        // Imprimir FACTURA completa con totales y ubicaciones
+        printInvoiceBtn.addEventListener('click', ()=>{
+            if(!currentVenta) return;
+            // construimos filas con ubicacion y detalles
+            let productosHtml='';
+            (currentVenta.productos||[]).forEach(p=>{
+                productosHtml+=`<tr>
+                    <td>${p.nombre||''}</td>
+                    <td style="text-align:center">${p.ubicacion || ''}</td>
+                    <td style="text-align:center">${p.cantidad||0}</td>
+                    <td style="text-align:right">${(p.precioUnitario||0).toFixed(2)}</td>
+                    <td style="text-align:right">${(p.subtotal||0).toFixed(2)}</td>
+                </tr>`;
+            });
+
+            const subtotal = document.getElementById('summary-subtotal-productos').textContent || '0.00';
+            const adicionales = document.getElementById('summary-total-adicionales').textContent || '0.00';
+            const impuestos = document.getElementById('summary-impuestos').textContent || '0.00';
+            const totalFinal = document.getElementById('summary-total-final').textContent || '0.00';
+
+            const w=window.open('','_blank');
+            w.document.write(`<html><head><title>Factura ${currentVenta.codigoVenta||''}</title><style>
+                body{font-family:Arial;margin:20px;color:#222}
+                .header{display:flex;justify-content:space-between;align-items:center}
+                h1{margin:0}
+                table{width:100%;border-collapse:collapse;margin-top:12px}
+                th,td{border:1px solid #ddd;padding:8px;text-align:left}
+                th{background:#f3f6f8;color:#003366}
+                td.right{text-align:right}
+                .totals{margin-top:12px;width:50%;float:right}
+                .totals .row{display:flex;justify-content:space-between;padding:6px 0}
+            </style></head><body>
+                <div class="header"><div><h1>FACTURA</h1><p><strong>Cliente:</strong> ${currentVenta.clienteNombre||''}</p><p><strong>Venta:</strong> ${currentVenta.codigoVenta||''}</p><p><strong>Fecha:</strong> ${currentVenta.fechaVenta ? new Date(currentVenta.fechaVenta).toLocaleString() : ''}</p></div></div>
+
+                <h3>Productos</h3>
+                <table>
+                    <thead><tr><th>Producto</th><th>Ubicación</th><th style="text-align:center">Cant.</th><th style="text-align:right">Precio U.</th><th style="text-align:right">Subtotal</th></tr></thead>
+                    <tbody>${productosHtml}</tbody>
+                </table>
+
+                <div class="totals">
+                    <div class="row"><div>Subtotal Productos:</div><div>${parseFloat(subtotal).toFixed(2)}</div></div>
+                    <div class="row"><div>Adicionales/Deducciones:</div><div>${parseFloat(adicionales).toFixed(2)}</div></div>
+                    <div class="row"><div>Impuestos:</div><div>${parseFloat(impuestos).toFixed(2)}</div></div>
+                    <div class="row" style="font-weight:700"><div>TOTAL:</div><div>${parseFloat(totalFinal).toFixed(2)}</div></div>
+                </div>
+
+                <div style="clear:both; margin-top:60px"><strong>Observaciones:</strong> __________________________</div>
+
+            </body></html>`);
+            w.document.close();
+            w.print();
+        });
+
+    });
+</script>
+</body>
+</html>
