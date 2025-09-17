@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Inventario de Productos - MOTOLAND</title>
+    <link rel="stylesheet" href="../style.css" />
+    <style>
+        .inventario-container { background-color: #f9f9f9; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        #inventario-table { width: 100%; margin-top: 20px; border-collapse: collapse; }
+        #inventario-table th, #inventario-table td { padding: 12px 15px; border: 1px solid #ddd; text-align: left; vertical-align: middle; }
+        #inventario-table th { background-color: #003366; color: white; }
+        #inventario-table tbody tr:nth-of-type(even) { background-color: #f2f2f2; }
+        #search-input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; margin-bottom: 15px; }
+        .stock-bajo { color: #d93025; font-weight: bold; }
+        .stock-normal { color: #1e8e3e; }
+        .ubicacion-cell { font-weight: 600; color: #444; }
+        @media (max-width:900px) {
+            /* en pantallas pequeñas podría colapsar la columna ubicacion si quieres */
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header class="menu-header">
+        <h1>Inventario de Productos</h1>
+        <button onclick="window.location.href='../menu.html'">Volver al Menú</button>
+    </header>
+
+    <div class="inventario-container">
+        <input type="text" id="search-input" placeholder="Buscar por código o nombre de producto..." />
+
+        <table id="inventario-table">
+            <thead>
+            <tr>
+                <th>Código</th>
+                <th>Nombre del Producto</th>
+                <th>Ubicación</th>
+                <th>Precio de Venta (Bs.)</th>
+                <th>Stock Actual</th>
+            </tr>
+            </thead>
+            <tbody id="inventario-tbody"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- util de ubicacion -->
+<script src="productos-ubicacion.js"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const tbody = document.getElementById('inventario-tbody');
+        const searchInput = document.getElementById('search-input');
+        let allProducts = [];
+
+        // fallback determinístico para mostrar una ubicación si el backend no la trae
+        function fallbackUbicacionFromProduct(p) {
+            const seed = (typeof p.id === 'number') ? p.id : (p.codigo ? Array.from(String(p.codigo)).reduce((s,c)=>s+c.charCodeAt(0),0) : Date.now());
+            const zona = (seed % 4) + 1;               // 1..4
+            const rack = (seed % 50) + 1;              // 1..50
+            const letras = ['A','B','C','D','E'];
+            const altura = letras[(seed % letras.length)];
+            return `P${zona}/R${rack}/${altura}`;
+        }
+
+        // Devuelve solo la parte "P2/R32/C" sin prefijo
+        function buildUbicacionPlain(p) {
+            try {
+                const pu = window.ProductosUbicacion;
+                if (pu && typeof pu.etiquetaUbicacion === 'function') {
+                    // la función del util devuelve " - Ubicacion: P2/R32/C" en nuestra versión,
+                    // por eso limpiamos el prefijo si existe
+                    const etiqueta = pu.etiquetaUbicacion(p) || '';
+                    if (etiqueta) {
+                        // quitar prefijo si lo trae
+                        return etiqueta.replace(/^\s*-\s*Ubicacion:\s*/i, '');
+                    }
+                }
+            } catch(e) {
+                console.warn('ProductosUbicacion falla:', e);
+            }
+
+            if (p.ubicacion) return String(p.ubicacion);
+            // Si hay columnas estructuradas:
+            if (p.ubicacion_zona && p.ubicacion_rack && p.ubicacion_altura) {
+                return `P${p.ubicacion_zona}/R${p.ubicacion_rack}/${String(p.ubicacion_altura).toUpperCase()}`;
+            }
+
+            return fallbackUbicacionFromProduct(p);
+        }
+
+        function escapeHtml(text) {
+            if (typeof text !== 'string') return text;
+            return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+        }
+
+        function renderTable(products) {
+            tbody.innerHTML = '';
+            if (!products || products.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">No hay productos en el inventario.</td></tr>';
+                return;
+            }
+            products.forEach(p => {
+                const row = document.createElement('tr');
+                const stockClass = (typeof p.stock === 'number' && p.stock <= 5) ? 'stock-bajo' : 'stock-normal';
+                const precio = (typeof p.precioVenta !== 'undefined') ? p.precioVenta : (typeof p.precio_venta !== 'undefined' ? p.precio_venta : 0);
+                const ubicPlain = buildUbicacionPlain(p);
+
+                row.innerHTML = `
+                <td>${escapeHtml(p.codigo || 'N/A')}</td>
+                <td>${escapeHtml(p.nombre || '')}</td>
+                <td class="ubicacion-cell">${escapeHtml(ubicPlain)}</td>
+                <td>${Number(precio).toFixed(2)}</td>
+                <td><span class="${stockClass}">${(typeof p.stock === 'number' ? p.stock : (p.cantidad || 'N/A'))}</span></td>
+            `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // fetch usando ruta relativa basada en el contexto (para evitar 404 fuera de app)
+        const ctx = window.location.pathname.split('/')[1] || '';
+        const apiUrl = `${window.location.origin}/${ctx}/productos`;
+
+        fetch(apiUrl)
+            .then(r => {
+                if (!r.ok) throw new Error('Error en la respuesta del servidor: ' + r.status);
+                return r.json();
+            })
+            .then(data => {
+                allProducts = Array.isArray(data) ? data : [];
+                renderTable(allProducts);
+            })
+            .catch(error => {
+                console.error('Error al cargar inventario:', error);
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:red;">Error al cargar los datos del inventario.</td></tr>';
+            });
+
+        searchInput.addEventListener('input', () => {
+            const q = searchInput.value.trim().toLowerCase();
+            const filtered = allProducts.filter(p => {
+                const codigo = (p.codigo || '').toString().toLowerCase();
+                const nombre = (p.nombre || '').toString().toLowerCase();
+                return codigo.includes(q) || nombre.includes(q);
+            });
+            renderTable(filtered);
+        });
+    });
+</script>
+</body>
+</html>

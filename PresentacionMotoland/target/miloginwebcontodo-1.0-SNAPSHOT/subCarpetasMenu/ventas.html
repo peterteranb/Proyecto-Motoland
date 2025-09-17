@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Registro de Ventas - MOTOLAND</title>
+    <link rel="stylesheet" href="../style.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+        :root{
+            --primary:#003366; --accent:#0b66c3; --danger:#d9534f; --muted:#6c757d; --radius:12px; --card:#fff;
+        }
+        *{box-sizing:border-box}
+        body{font-family:'Poppins',system-ui,-apple-system,"Segoe UI",Roboto,Arial;margin:0;background:linear-gradient(180deg,#f4f7f9,#eef3f6);padding:32px;}
+        .container{max-width:1100px;margin:0 auto}
+        header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+        header h1{color:var(--primary);margin:0;font-size:32px}
+
+        /* <-- botón como los demás (píldora, rojo) --> */
+        .btn-back{
+            background:var(--danger);
+            color:#fff;
+            border:none;
+            padding:10px 16px;
+            border-radius:26px;
+            cursor:pointer;
+            font-weight:700;
+            box-shadow: 0 6px 18px rgba(217,83,79,0.15);
+        }
+
+        .card{background:var(--card);border-radius:12px;padding:20px;border:1px solid rgba(12,20,30,0.03);box-shadow:0 8px 20px rgba(15,23,42,0.06);margin-bottom:18px}
+        label{display:block;font-weight:600;margin-bottom:8px;color:var(--primary)}
+        input[type="text"], input[type="number"], select{width:100%;padding:12px;border-radius:10px;border:1px solid #e3e7ea;font-size:15px}
+        .row{display:grid;grid-template-columns:1fr 260px;gap:12px;align-items:center}
+        .big-btn{background:var(--primary);color:#fff;border:none;padding:12px;border-radius:10px;font-weight:700;cursor:pointer}
+        .table{width:100%;border-collapse:collapse;margin-top:10px}
+        .table th, .table td{padding:12px;border:1px solid #eef2f5;text-align:left}
+        .table th{background:var(--primary);color:#fff}
+        .muted{color:var(--muted)}
+        .inline-flex{display:flex;gap:8px;align-items:center}
+        .suggestions{position:relative}
+        .listbox{position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid #ddd;border-radius:8px;max-height:200px;overflow:auto;z-index:999;margin-top:6px}
+        .list-item{padding:10px;cursor:pointer;border-bottom:1px solid #f3f3f3}
+        .list-item:hover{background:#f6f9ff}
+        .stock-warning{color:var(--danger);font-weight:700}
+        .small-btn{padding:6px 10px;border-radius:8px;border:none;background:#dc3545;color:#fff;cursor:pointer;margin-left:6px}
+        .edit-btn{padding:6px 10px;border-radius:8px;border:none;background:#0b66c3;color:#fff;cursor:pointer;margin-right:6px}
+        .total {text-align:right;font-size:18px;font-weight:800;margin-top:8px;color:var(--primary)}
+        input.invalid {border-color:var(--danger); box-shadow: 0 4px 12px rgba(217,83,79,0.08);}
+        @media (max-width:900px){ .row{grid-template-columns:1fr} }
+
+        /* Notificación fija abajo (misma UX que en otras páginas) */
+        #status-message {
+            position: fixed;
+            left: 50%;
+            transform: translateX(-50%);
+            bottom: 24px;
+            z-index: 2000;
+            display: none;
+            padding: 12px 18px;
+            border-radius: 12px;
+            font-weight: 600;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+            max-width: 90%;
+            text-align: center;
+        }
+        #status-message.success { background: #e6fbf1; color: #0a6a3a; border: 1px solid rgba(10,106,58,0.08); }
+        #status-message.error { background: #fff0f0; color: #8a1f1f; border: 1px solid rgba(138,31,31,0.06); }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <h1>Registro de Ventas</h1>
+        <button class="btn-back" onclick="location.href='../menu.html'">Volver al Menú</button>
+    </header>
+
+    <section class="card">
+        <h2 style="text-align:center;color:var(--primary)">Añadir Producto a la Venta</h2>
+
+        <div style="margin-bottom:12px">
+            <label>Buscar Producto (con stock disponible):</label>
+            <div class="suggestions">
+                <input id="producto-search" type="text" placeholder="Escribe para buscar (ej: Casco, Llanta)..." autocomplete="off">
+                <div id="product-results" class="listbox" style="display:none"></div>
+            </div>
+        </div>
+
+        <div class="row" style="margin-top:8px">
+            <div>
+                <label for="cantidad">Cantidad:</label>
+                <input id="cantidad" type="number" min="1" value="1">
+            </div>
+            <div>
+                <label for="cliente-select">Cliente</label>
+                <select id="cliente-select"><option value="">Cliente general</option></select>
+            </div>
+        </div>
+
+        <div style="margin-top:12px">
+            <button id="add-to-sale" class="big-btn" style="width:100%">Añadir a la Venta</button>
+        </div>
+    </section>
+
+    <section class="card">
+        <h2 style="text-align:center;color:var(--primary)">Detalle de Venta Actual</h2>
+
+        <table class="table" id="venta-actual-table">
+            <thead>
+            <tr><th>Producto</th><th>Cantidad</th><th>Precio Unit. (Bs.)</th><th>Stock</th><th>Subtotal</th><th>Acción</th></tr>
+            </thead>
+            <tbody id="venta-actual-tbody"></tbody>
+        </table>
+
+        <div class="total">TOTAL: Bs. <span id="total-venta">0.00</span></div>
+
+        <div style="margin-top:12px">
+            <button id="registrar-venta-btn" class="big-btn" style="width:100%">Registrar Venta</button>
+        </div>
+    </section>
+</div>
+
+<!-- Notificación (fija abajo) -->
+<div id="status-message" role="status" aria-live="polite"></div>
+
+<script>
+    (function(){
+        const apiBase = '../'; // ajusta si tu contexto es distinto
+        let productosList = []; // lista completa desde server
+        let clienteList = [];   // lista clientes
+        let selectedProduct = null; // producto seleccionado desde sugerencias
+        let carrito = []; // { productoId, nombre, precioUnitario, cantidad, stock, ubicacion, codigo }
+
+        // DOM
+        const inputSearch = document.getElementById('producto-search');
+        const resultsDiv = document.getElementById('product-results');
+        const cantidadInput = document.getElementById('cantidad');
+        const clienteSelect = document.getElementById('cliente-select');
+        const addBtn = document.getElementById('add-to-sale');
+        const ventaTbody = document.getElementById('venta-actual-tbody');
+        const totalSpan = document.getElementById('total-venta');
+        const registrarBtn = document.getElementById('registrar-venta-btn');
+        const statusDiv = document.getElementById('status-message');
+
+        function showStatus(msg, ok = true, timeout = 4500) {
+            statusDiv.textContent = msg;
+            statusDiv.className = ok ? 'success' : 'error';
+            statusDiv.classList.add(ok ? 'success' : 'error');
+            // ensure both classes reset correctly
+            statusDiv.classList.toggle('success', ok);
+            statusDiv.classList.toggle('error', !ok);
+            statusDiv.style.display = 'block';
+            // hide after timeout (unless timeout === 0)
+            if (timeout > 0) {
+                clearTimeout(statusDiv._t);
+                statusDiv._t = setTimeout(() => { statusDiv.style.display = 'none'; }, timeout);
+            }
+        }
+
+        function hideStatus() {
+            statusDiv.style.display = 'none';
+        }
+
+        // Cargar productos y clientes al inicio
+        function loadData(){
+            fetch(apiBase + 'ventas')
+                .then(r => r.ok ? r.json() : r.json().then(j=>{ throw j; }))
+                .then(data => { productosList = Array.isArray(data) ? data : []; })
+                .catch(err => { console.error('Error cargando productos', err); productosList = []; });
+
+            fetch(apiBase + 'clientes')
+                .then(r => r.ok ? r.json() : r.json().then(j => { throw j; }))
+                .then(data => {
+                    clienteList = Array.isArray(data) ? data : [];
+                    clienteSelect.innerHTML = '<option value="">Cliente general</option>';
+                    clienteList.forEach((c, i) => {
+                        const val = (c.id != null) ? c.id : (c.nombre + '|' + i);
+                        const opt = document.createElement('option');
+                        opt.value = val;
+                        opt.textContent = c.nombre || 'Cliente';
+                        clienteSelect.appendChild(opt);
+                    });
+                })
+                .catch(err => { console.error('Error cargando clientes', err); /* permitimos proceder */ });
+        }
+        loadData();
+
+        // AUTOCOMPLETE
+        inputSearch.addEventListener('input', () => {
+            const q = inputSearch.value.trim().toLowerCase();
+            resultsDiv.innerHTML = '';
+            if (!q) { resultsDiv.style.display = 'none'; selectedProduct = null; return; }
+            const matches = productosList.filter(p => (p.nombre || '').toLowerCase().includes(q) || (p.codigo || '').toLowerCase().startsWith(q));
+            if (matches.length === 0) { resultsDiv.style.display = 'none'; return; }
+            matches.slice(0, 30).forEach(p => {
+                const div = document.createElement('div');
+                div.className = 'list-item';
+                div.innerHTML = `<strong>${p.nombre}</strong> <span style="float:right" class="muted">${p.precioVenta!=null ? 'Bs. ' + Number(p.precioVenta).toFixed(2) : ''} ${p.stock!=null? '| stock: '+p.stock : ''}</span><div class="muted" style="font-size:12px">${p.codigo || ''} ${p.ubicacion ? '| ' + p.ubicacion : ''}</div>`;
+                div.addEventListener('click', () => {
+                    selectedProduct = p;
+                    inputSearch.value = (p.codigo ? p.codigo + ' - ' : '') + p.nombre;
+                    resultsDiv.style.display = 'none';
+                });
+                resultsDiv.appendChild(div);
+            });
+            resultsDiv.style.display = 'block';
+        });
+
+        // ocultar al click fuera
+        document.addEventListener('click', (e) => {
+            if (!resultsDiv.contains(e.target) && e.target !== inputSearch) resultsDiv.style.display = 'none';
+        });
+
+        // Añadir al carrito
+        addBtn.addEventListener('click', () => {
+            if (!selectedProduct) { showStatus('Selecciona un producto de la lista desplegable.', false); inputSearch.focus(); return; }
+            const cantidad = parseInt(cantidadInput.value) || 0;
+            if (cantidad <= 0) { showStatus('Ingresa una cantidad válida (mayor a 0).', false); cantidadInput.focus(); return; }
+
+            const item = {
+                productoId: selectedProduct.id,
+                nombre: selectedProduct.nombre,
+                codigo: selectedProduct.codigo,
+                precioUnitario: Number(selectedProduct.precioVenta || selectedProduct.precio_venta || 0),
+                cantidad: cantidad,
+                stock: Number(selectedProduct.stock || 0),
+                ubicacion: selectedProduct.ubicacion || null
+            };
+
+            const existing = carrito.find(c => String(c.productoId) === String(item.productoId));
+            if (existing) {
+                existing.cantidad += item.cantidad;
+            } else {
+                carrito.push(item);
+            }
+
+            selectedProduct = null;
+            inputSearch.value = '';
+            cantidadInput.value = 1;
+            renderCarrito();
+        });
+
+        // Renderizar tabla de carrito con edición
+        function renderCarrito(){
+            ventaTbody.innerHTML = '';
+            let total = 0;
+            carrito.forEach((it, idx) => {
+                const tr = document.createElement('tr');
+
+                // Producto
+                const tdProd = document.createElement('td');
+                tdProd.innerHTML = `<div style="font-weight:700">${it.nombre}</div><div class="muted" style="font-size:12px">${it.codigo || ''} ${it.ubicacion ? '| ' + it.ubicacion : ''}</div>`;
+
+                // Cantidad
+                const tdCant = document.createElement('td');
+                const inpCant = document.createElement('input');
+                inpCant.type = 'number'; inpCant.min = '1'; inpCant.value = it.cantidad;
+                inpCant.style.width = '80px';
+                inpCant.addEventListener('input', () => {
+                    it.cantidad = parseInt(inpCant.value) || 0;
+                    validateRow(tr, it);
+                    recalc();
+                });
+                tdCant.appendChild(inpCant);
+
+                // Precio
+                const tdPrecio = document.createElement('td');
+                const inpPrecio = document.createElement('input');
+                inpPrecio.type = 'number'; inpPrecio.step = '0.01'; inpPrecio.value = Number(it.precioUnitario||0).toFixed(2);
+                inpPrecio.style.width = '110px';
+                inpPrecio.addEventListener('input', () => { it.precioUnitario = parseFloat(inpPrecio.value) || 0; recalc(); });
+                tdPrecio.appendChild(inpPrecio);
+
+                // Stock
+                const tdStock = document.createElement('td');
+                tdStock.textContent = (typeof it.stock !== 'undefined' ? String(it.stock) : '-');
+
+                // Subtotal
+                const tdSub = document.createElement('td');
+                tdSub.style.textAlign = 'right';
+                const subtotal = (it.cantidad * it.precioUnitario) || 0;
+                tdSub.textContent = subtotal.toFixed(2);
+                total += subtotal;
+
+                // Acciones
+                const tdAcc = document.createElement('td');
+                const btnEdit = document.createElement('button');
+                btnEdit.className = 'edit-btn';
+                btnEdit.type = 'button';
+                btnEdit.textContent = 'Editar';
+                btnEdit.addEventListener('click', () => startEditProduct(idx, it, tr, inpPrecio));
+                const btnRemove = document.createElement('button');
+                btnRemove.className = 'small-btn';
+                btnRemove.type = 'button';
+                btnRemove.textContent = 'Quitar';
+                btnRemove.addEventListener('click', () => {
+                    carrito = carrito.filter((_, i) => i !== idx);
+                    renderCarrito();
+                });
+                tdAcc.appendChild(btnEdit);
+                tdAcc.appendChild(btnRemove);
+
+                tr.appendChild(tdProd);
+                tr.appendChild(tdCant);
+                tr.appendChild(tdPrecio);
+                tr.appendChild(tdStock);
+                tr.appendChild(tdSub);
+                tr.appendChild(tdAcc);
+
+                validateRow(tr, it);
+                ventaTbody.appendChild(tr);
+            });
+            totalSpan.textContent = total.toFixed(2);
+        }
+
+        // validación visual por fila
+        function validateRow(tr, item){
+            // limpiar advertencias previas
+            const prevWarn = tr.querySelector('.warn');
+            if (prevWarn) prevWarn.remove();
+
+            if (item.stock != null && item.stock !== '' && item.cantidad > item.stock) {
+                tr.querySelectorAll('input').forEach(inp => inp.classList.add('invalid'));
+                const warn = document.createElement('div'); warn.className = 'warn stock-warning'; warn.textContent = '¡Cantidad mayor al stock!';
+                tr.cells[4].appendChild(warn);
+            } else {
+                tr.querySelectorAll('input').forEach(inp => inp.classList.remove('invalid'));
+            }
+            // actualizar subtotal
+            const subtotalCell = tr.cells[4];
+            const subtotal = (item.cantidad * item.precioUnitario) || 0;
+            subtotalCell.textContent = subtotal.toFixed(2);
+        }
+
+        function recalc(){
+            let total = 0;
+            carrito.forEach(it => { total += (it.cantidad * it.precioUnitario) || 0; });
+            totalSpan.textContent = total.toFixed(2);
+        }
+
+        // editar producto en la fila (autocompleta precio al seleccionar otro producto)
+        function startEditProduct(index, item, row, inpPrecio){
+            const td = row.cells[0];
+            const originalHtml = td.innerHTML;
+            td.innerHTML = `<input type="text" class="inline-edit" value="${item.codigo ? item.codigo + ' - ' : ''}${item.nombre}" style="width:100%;padding:8px;border-radius:6px;border:1px solid #ddd"> <div class="listbox" style="display:none;position:relative"></div>`;
+            const input = td.querySelector('.inline-edit');
+            const results = td.querySelector('.listbox');
+
+            input.addEventListener('input', () => {
+                const q = input.value.trim().toLowerCase();
+                results.innerHTML = '';
+                if (!q) { results.style.display = 'none'; return; }
+                const matches = productosList.filter(p => (p.nombre || '').toLowerCase().includes(q) || (p.codigo||'').toLowerCase().startsWith(q));
+                matches.slice(0,20).forEach(p => {
+                    const div = document.createElement('div'); div.className = 'list-item';
+                    div.innerHTML = `<strong>${p.nombre}</strong> <span style="float:right" class="muted">${p.precioVenta!=null ? 'Bs. ' + Number(p.precioVenta).toFixed(2) : ''} ${p.stock!=null? '| stock: '+p.stock : ''}</span>`;
+                    div.addEventListener('click', () => {
+                        // aplicar nuevo producto al carrito
+                        item.productoId = p.id;
+                        item.nombre = p.nombre;
+                        item.codigo = p.codigo;
+                        item.precioUnitario = Number(p.precioVenta || p.precio_venta || 0);
+                        item.stock = Number(p.stock || 0);
+                        item.ubicacion = p.ubicacion || null;
+                        // actualizar precio en la fila
+                        inpPrecio.value = item.precioUnitario.toFixed(2);
+                        // cerrar editor
+                        td.innerHTML = `<div style="font-weight:700">${item.nombre}</div><div class="muted" style="font-size:12px">${item.codigo || ''} ${item.ubicacion ? '| '+item.ubicacion : ''}</div>`;
+                        renderCarrito();
+                    });
+                    results.appendChild(div);
+                });
+                results.style.display = matches.length ? 'block' : 'none';
+            });
+
+            input.addEventListener('blur', () => setTimeout(()=> { if (td.contains(input)) td.innerHTML = originalHtml; }, 250));
+            input.focus();
+        }
+
+        // registrar venta -> POST
+        registrarBtn.addEventListener('click', async () => {
+            if (carrito.length === 0) { showStatus('No hay productos en la venta.', false); return; }
+
+            for (const it of carrito) {
+                if (!it.productoId || it.cantidad <= 0) { showStatus('Hay una línea con datos inválidos.', false); return; }
+                if (it.stock != null && it.cantidad > it.stock) {
+                    if (!confirm('Hay artículos con cantidad mayor al stock. Continuar de todas formas?')) return;
+                }
+            }
+
+            const clienteRaw = clienteSelect.value || null;
+            let clienteId = null;
+            if (clienteRaw && !clientIsComposite(clienteRaw)) {
+                try { clienteId = parseInt(clienteRaw); } catch(e) { clienteId = null; }
+            }
+
+            const itemsPayload = carrito.map(it => ({ productoId: it.productoId, cantidad: it.cantidad, precioUnitario: it.precioUnitario }));
+            const payload = { clienteId: clienteId, items: itemsPayload };
+
+            try {
+                const res = await fetch(apiBase + 'ventas', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                const body = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    showStatus(body.message || 'Error al registrar venta.', false);
+                    console.error('Error registrar venta', body);
+                    return;
+                }
+                // éxito: mostramos la notificación verde (en vez de alert de browser)
+                showStatus(body.message || 'Venta registrada con éxito.', true);
+
+                // limpiar y recargar datos
+                carrito = [];
+                renderCarrito();
+                loadData();
+            } catch(err) {
+                console.error('Error enviando venta', err);
+                showStatus('Error de conexión al registrar venta.', false);
+            }
+        });
+
+        function clientIsComposite(val) {
+            return typeof val === 'string' && val.indexOf('|') !== -1;
+        }
+
+        // Render inicial
+        renderCarrito();
+    })();
+</script>
+</body>
+</html>
